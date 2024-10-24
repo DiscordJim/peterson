@@ -1,3 +1,2 @@
 # Peterson's Algorithm
-
-Implementation in Rust. Just an experiment.
+Implementing Peterson's Algorithm for multiple processes in Rust.

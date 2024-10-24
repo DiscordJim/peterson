@@ -1,21 +1,38 @@
-use std::{sync::{atomic::{AtomicBool, Ordering}, Arc, Condvar}, thread, time::Duration};
+use std::{sync::{atomic::{AtomicBool, Ordering}, Arc}, thread, time::Duration};
 
 
 pub const ROUNDS: usize = 100;
-pub const PROCESSES: usize = 4;
+pub const PROCESSES: usize = 1;
+
+
+/// How many milliseconds should each process hold
+/// the critical section for?
+pub const CRITICAL_SECTION_TIME_MS: u64 = 1;
+
+/// To watch the program experience data races
+/// turn this off.
+pub const ENABLE_PETERSON: bool = true;
 
 /// Allows us to check that there are no races.
+/// 
+/// This just maintains an atomic boolean that is
+/// written with sequential consistency guarantees.
+/// 
+/// If we ever true to hold without releasing, it will
+/// immediately panic the program.
 #[derive(Clone, Default)]
 pub struct HotPotato {
     counter: Arc<AtomicBool>
 }
 
 impl HotPotato {
+    /// Entering the critical section.
     pub fn hold(&self) {
         if self.counter.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
             panic!("Potato was already held! Race condition!");
         }
     }
+    /// Exiting the critical section.
     pub fn release(&self) {
         if self.counter.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_err() {
             panic!("Potato was released but not already held! Race condition!");
@@ -23,55 +40,15 @@ impl HotPotato {
     }
 }
 
-// pub fn process_one(flag: &mut Box<[bool; 2]>, turn: &mut Box<usize>, potato: HotPotato) {
-
-    
-//     for _ in 0..ROUNDS {
-//         flag[0] = true;
-//         **turn = 1;
-//         while flag[1] && **turn == 1 {
-//             // busy wait
-//         }
-//         potato.hold();
-
-//         //critical
-//         println!("P1 Critical.");
-
-//         potato.release();
-
-//         flag[0] = false;
-
-//     }
-   
-// }
-
-// pub fn process_zero(flag: &mut Box<[bool; 2]>, turn: &mut Box<usize>, potato: HotPotato) {
-//     for _ in 0..ROUNDS {
-//         flag[1] = true;
-//         **turn = 0;
-
-//         while flag[0] && **turn == 0 {
-
-//         }
-
-//         // Enter Critical
-//         potato.hold();
-
-
-//         potato.release();
-//         // End Critical
-//         flag[1] = false;
-//     }
-// }
-
-pub fn exists(i: usize, k: usize, flag: &mut Box<[i32; PROCESSES]>, turn: &mut Box<[usize; PROCESSES - 1]>) -> bool {
+/// For some process i, this checks there is no process j such that
+/// j is competing at a higher level if it is i's turn to be scheduled.
+pub fn exists(i: usize, k: usize, flag: &mut [i32; PROCESSES], turn: &mut [usize; PROCESSES - 1]) -> bool {
     let mut does_exist = false;
     for j in 0..PROCESSES {
+        // for j != i
         if j == i {
-            // for j != i
             continue;
-        }
-        if flag[j] >= k as i32 && turn[k] == i {
+        } else if flag[j] >= k as i32 && turn[k] == i {
             does_exist = true;
             break;
         }
@@ -79,14 +56,14 @@ pub fn exists(i: usize, k: usize, flag: &mut Box<[i32; PROCESSES]>, turn: &mut B
     does_exist
 }
 
-pub fn contender(i: usize, flag: &mut Box<[i32; PROCESSES]>, turn: &mut Box<[usize; PROCESSES - 1]>, potato: HotPotato) {
+pub fn contender(i: usize, flag: &mut [i32; PROCESSES], turn: &mut [usize; PROCESSES - 1], potato: HotPotato) {
    
     for k in 0..PROCESSES - 1 {
         flag[i] = k as i32;
         turn[k] = i;
         
         
-        while exists(i, k, flag, turn) {
+        while ENABLE_PETERSON && exists(i, k, flag, turn) {
             // Busy wait
         }
 
@@ -95,66 +72,61 @@ pub fn contender(i: usize, flag: &mut Box<[i32; PROCESSES]>, turn: &mut Box<[usi
 
     println!("Holding ({})", i);
     potato.hold();
-    thread::sleep(Duration::from_millis(10));
+    thread::sleep(Duration::from_millis(CRITICAL_SECTION_TIME_MS));
     potato.release();
     flag[i] = -1;
 }
 
 
-
+/// This function creates a mutable pointer by leaking
+/// the value.
+/// 
+/// This value will never be dropped and it is very easy to
+/// create data races like this.
+/// 
+/// Since we are testing mutual exclusion, this is desired.
+pub fn create_shared_memory<T>(val: T) -> *mut T {
+    Box::leak(Box::new(val)) as *mut T
+}
 
 
 
 fn main() {
 
+    // This allows us to check that we are doing memory sharing correctly.
     let potato = HotPotato::default();
-
     
-    
-
-    let mut flag = Box::new([-1i32; PROCESSES]);
-    let mut turn = Box::new([0usize; PROCESSES - 1]);
-
-    let flag_ptr = (&mut flag) as *mut Box<[i32; PROCESSES]>;
-    let turn_ptr = (&mut turn) as *mut Box<[usize; PROCESSES - 1]>;
+    // Create raw unprotected shared memory.
+    let flag: *mut [i32; PROCESSES] = create_shared_memory([-1i32; PROCESSES]);
+    let turn: *mut [usize; PROCESSES - 1] = create_shared_memory([0usize; PROCESSES - 1]);
 
     let mut handles = vec![];
 
+    // Spawn all the threads.
     for i in 0..PROCESSES {
         handles.push(thread::spawn({
-
-            let flag = unsafe { &mut *flag_ptr };
-            let turn = unsafe { &mut *turn_ptr };
+            // This operation is HIGHLY unsafe. We are
+            // creating pointers that can easily race.
+            let flag = unsafe { &mut *flag };
+            let turn = unsafe { &mut *turn };
             let potato = potato.clone();
             move || {
                 for _ in 0..ROUNDS {
                     contender(i, flag, turn, potato.clone());
                 }
-                
-                // process_zero(flag, turn, potato);
             }
         }));
     }
 
-    // let handler2 = thread::spawn({
-    //     let flag = unsafe { &mut *flag_ptr };
-    //     let turn = unsafe { &mut *turn_ptr };
-    //     let potato = potato.clone();
-    //     || {
-    //         process_one(flag, turn, potato);
-    //     }
-    // });
-
+    // Wait for all threads to terminate.
     for handle in handles {
         handle.join().unwrap();
     }
 
-
-
-    // handler.join().unwrap();
-    // handler2.join().unwrap();
-
+    unsafe {
+        std::ptr::drop_in_place(flag);
+        std::ptr::drop_in_place(turn);
+    }
     
-    
-    println!("Hello, world!");
+    println!("Finished!");
 }

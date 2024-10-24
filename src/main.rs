@@ -88,6 +88,8 @@ pub fn contender(i: usize, flag: &mut [i32; PROCESSES], turn: &mut [usize; PROCE
             thread::sleep(Duration::from_millis(SPIN_LOCK_WAITING_TIME_MS));
         }
 
+        // At this point, we have broken out of the waiting loop,
+        // so we are now proceeding to the next level. (No processes x >= k).
         
     }
 
@@ -107,7 +109,7 @@ pub fn contender(i: usize, flag: &mut [i32; PROCESSES], turn: &mut [usize; PROCE
 /// This value will never be dropped and it is very easy to
 /// create data races like this.
 /// 
-/// Since we are testing mutual exclusion, this is desired.
+/// Since we are testing mutual exclusion, this is desired behaviour.
 pub fn create_shared_memory<T>(val: T) -> *mut T {
     Box::leak(Box::new(val)) as *mut T
 }
@@ -119,9 +121,14 @@ fn main() {
     let potato = HotPotato::default();
     
     // Create raw unprotected shared memory.
+    // The flag represents what level the process is competing at.
     let flag: *mut [i32; PROCESSES] = create_shared_memory([-1i32; PROCESSES]);
+    // At level k, what process thinks it is their turn?
     let turn: *mut [usize; PROCESSES - 1] = create_shared_memory([0usize; PROCESSES - 1]);
 
+
+    // Join handle list, this is just so we can wait
+    // for all of our processes to terminate.
     let mut handles = vec![];
 
     // Spawn all the threads.

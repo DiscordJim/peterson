@@ -1,6 +1,12 @@
 # Peterson's Algorithm
 Implementing Peterson's Algorithm for multiple processes in Rust.
 
+## Running
+Make sure you have `rustup` installed with `cargo`.
+```bash
+$ cargo run
+```
+
 ## Algorithm Details
 The shared memory is as follows:
 - There is a `flag` array which contains `[0, ... n - 1]` values. These are initially all `-1`. This indicates what level each process is competing at. This value is set to `-1` to indicate that a process is *no longer competing* and is usually set at the end of the critical section.

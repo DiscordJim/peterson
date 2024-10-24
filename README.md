@@ -1,5 +1,5 @@
 # Peterson's Algorithm
-Implementing (Peterson's Algorithm)[https://en.wikipedia.org/wiki/Peterson%27s_algorithm] for mutual exclusion for multiple processes in Rust.
+Implementing [Peterson's Algorithm](https://en.wikipedia.org/wiki/Peterson%27s_algorithm) for mutual exclusion for multiple processes in Rust.
 
 Suppose we have a single resource and we want many parties (processes) to be able to read and write that resource without conflict, then we specifically want *mutual exclusion*. Writing/reading at the same time with multiple parties might leave the data in an inconsistent state, and thus only one should be able to access the data at any given time. This is what Peterson's Algorithm attempts to achieve.
 

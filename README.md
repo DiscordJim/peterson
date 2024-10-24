@@ -1,7 +1,39 @@
 # Peterson's Algorithm
 Implementing Peterson's Algorithm for multiple processes in Rust.
 
+## Algorithm Details
+The shared memory is as follows:
+- There is a `flag` array which contains `[0, ... n - 1]` values. These are initially all `-1`. This indicates what level each process is competing at. This value is set to `-1` to indicate that a process is *no longer competing* and is usually set at the end of the critical section.
+- There is a `turn` array which contains `[0, ... n - 2]` values. This indicates what process believes it is their turn at a certain level.
 
+Each process runs a subroutine:
+```rust
+// (1)
+for k in 0..PROCESSES - 1 {
+    flag[i] = k as i32; // (1)
+    turn[k] = i; // (2)
+    
+    while exists(i, k, flag, turn) { // (3)
+        // Spin (4)
+    }
+
+    // Advancing to next level (5)
+}
+
+// Enter critical section
+
+
+// Exit critical section
+flag[i] = -1; // (6)
+
+```
+The subroutine is described as follows for some process `i`:
+1. For `n` processes there are `n-1` levels. For a process to gain access to the critical section it must compete at all these levels.
+2. Upon beginning the competition at some level `k`, `i` sets it's flag to `k` to indicate that `i` is competing at level `k`.
+3. While there exists a process that is competing at the same level or higher, we wait. We can only advance once there are no processes competing at the same level or higher. Additionally, we check `turn[k] == i` as we want to see if it is our turn at the level. Consider the case where this is false, that means *another process has arrived at our level* and thus we may proceed upwards.
+4. This is just a simple spin lock, or it could involve something more complex for a waiting mechanism.
+5. We have "won" the competition at this level and can now proceed upwards.
+6. After exiting the critical section, we set our flag to `-1` to indicate we are no longer competiting.
 
 ## Implementation Details
 ### Memory Model

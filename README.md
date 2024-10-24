@@ -1,5 +1,5 @@
 # Peterson's Algorithm
-Implementing Peterson's Algorithm for multiple processes in Rust.
+Implementing (Peterson's Algorithm)[https://en.wikipedia.org/wiki/Peterson%27s_algorithm] for multiple processes in Rust.
 
 ## Running
 Make sure you have `rustup` installed with `cargo`.
